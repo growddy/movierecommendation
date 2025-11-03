@@ -6,22 +6,22 @@ import { Movie } from "@/types";
 export const revalidate = 60 * 60 * 24;
 
 async function SearchTerm({
-  params: { term },
-}: {
-  params: {
-    term: string;
-  };
-}) {
+  params, 
+}: { 
+  params: Promise<{ term: string }>;
+ }) {
+  const { term } = await params;
+  const q = decodeURIComponent(term);
   const movies = db.collection("movies");
 
   const similarMovies = (await movies
     .find(
       {},
       {
-        vectorize: term,
-        limit: 10,
-        // Do not include vectors in the output.
-        projection: { $vector: 0 },
+        vectorize: q,          // <- semantic search FROM the text query
+        includeSimilarity: true, // helpful during dev
+        limit: 12,
+        projection: { $vector: 0 }, // keep payload lean
       }
     )
     .toArray()) as Movie[];
@@ -34,12 +34,12 @@ async function SearchTerm({
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-10">
         {similarMovies.map((movie, i) => (
-          <div className="flex space-x-2 relative">
+          <div key={movie._id} className="flex space-x-2 relative">
             <p className="absolute flex items-center justify-center left-4 top-2 text-white font-extrabold text-xl z-40 rounded-full bg-indigo-500/80 w-10 h-10">
               {i + 1}
             </p>
 
-            <MoviePoster key={movie._id} movie={movie} />
+            <MoviePoster movie={movie} />
           </div>
         ))}
       </div>

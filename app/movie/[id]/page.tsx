@@ -7,23 +7,47 @@ import { notFound } from "next/navigation";
 // refresh cache every 24 hours
 export const revalidate = 60 * 60 * 24;
 
+
 async function MoviePage({
-  params: { id },
+  params, 
 }: {
-  params: {
-    id: string;
-  };
+  params: Promise<{ id: string }>; 
 }) {
+  const { id } = await params;
+
   const movies = db.collection("movies");
 
-  const search = await movies.find({ $and: [{ _id: id }] });
+  // 1) Fetch the movie AND ensure we include the vector
+  const cursor = await movies.find(
+    { _id: id },
+    {
+      // Only include what you use + the vector
+      projection: {
+        Title: 1,
+        Poster: 1,
+        Genre: 1,
+        Director: 1,
+        Actors: 1,
+        BoxOffice: 1,
+        Released: 1,
+        Runtime: 1,
+        Rated: 1,
+        imdbRating: 1,
+        Language: 1,
+        Country: 1,
+        $vectorize: 1,
+        $vector: 1, // <- IMPORTANT
+      },
+      limit: 1,
+    }
+  );
 
-  if (!(await search.hasNext())) {
-    return notFound();
-  }
+  if (!(await cursor.hasNext())) return notFound();
 
-  const movie = (await search.next()) as Movie;
+  const movie = (await cursor.next()) as Movie & { $vector?: number[] };
 
+
+  // 2) Similar by vector, exclude the same _id, include similarity
   const similarMovies = (await movies
     .find(
       {},
@@ -35,8 +59,7 @@ async function MoviePage({
     )
     .toArray()) as SimilarMovie[];
 
-  // cut the first movie because it is the same as the movie we are looking for
-  similarMovies.shift();
+    similarMovies.shift();
 
   return (
     <div>
@@ -80,19 +103,24 @@ async function MoviePage({
         </div>
       </div>
 
-      <div className="">
-        <h2 className="text-3xl pt-10 pl-10 font-bold ">
-          Similar Films you may like
-        </h2>
+      <div>
+        <h2 className="text-3xl pt-10 pl-10 font-bold">Similar Films you may like</h2>
         <div className="flex justify-between items-center lg:flex-row gap-x-20 gap-y-10 pl-20 pr-10 py-10 overflow-x-scroll">
-          {similarMovies.map((movie, i) => (
-            <MoviePoster
-              key={movie._id}
-              index={i + 1}
-              similarityRating={Number(movie.$similarity.toFixed(2)) * 100}
-              movie={movie}
-            />
-          ))}
+          {similarMovies.map((m, i) => {
+            const simPct =
+              typeof m.$similarity === "number"
+                ? Math.round(m.$similarity * 100) // guard against undefined
+                : undefined;
+
+            return (
+              <MoviePoster
+                key={m._id}
+                index={i + 1}
+                similarityRating={simPct} // your component should handle undefined gracefully
+                movie={m}
+              />
+            );
+          })}
         </div>
       </div>
     </div>
