@@ -53,7 +53,7 @@ async function MoviePage({
       {},
       {
         vector: movie.$vector,
-        limit: 6, // we will cut the first movie and want to show 5 similar movies
+        limit: 11, // we will cut the first movie and want to show x similar movies
         includeSimilarity: true,
       }
     )
